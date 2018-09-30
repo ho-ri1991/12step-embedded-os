@@ -10,7 +10,7 @@ void* memset(void* b, int c, long len)
   return b;
 }
 
-void* memcopy(void* dst, const void* src, long len)
+void* memcpy(void* dst, const void* src, long len)
 {
   char* d = dst;
   const char* s = src;
@@ -100,7 +100,7 @@ int putxval(unsigned long value, int column)
   p = buf + sizeof(buf) - 1;
   *(p--) = '\0';
 
-  if(!value && column)
+  if(!value && !column)
     column++;
 
   while(value || column)

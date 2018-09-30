@@ -2,7 +2,7 @@
 #define _LIB_H_INCLUDED_
 
 void* memset(void* b, int c, long len);
-void* memcopy(void* dst, const void* src, long len);
+void* memcpy(void* dst, const void* src, long len);
 int memcmp(const void* b1, const void* b2, long len);
 int strlen(const char* s);
 char* strcpy(char* dst, const char* src);
