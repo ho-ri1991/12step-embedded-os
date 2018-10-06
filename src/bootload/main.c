@@ -58,6 +58,8 @@ int main(void)
   static long size = -1;
   static unsigned char* loadbuf = NULL;
   extern int buffer_start; // defined in linker script
+  char* entry_point;
+  void (*f)(void);
 
   init();
 
@@ -87,7 +89,19 @@ int main(void)
     }
     else if (!strcmp(buf, "run"))
     {
-      elf_load(loadbuf);
+      entry_point = elf_load(loadbuf);
+      if (!entry_point)
+      {
+        puts("run error!");
+      }
+      else
+      {
+        puts("starting from entry point: ");
+        putxval((unsigned long)entry_point, 0);
+        puts("\n");
+        f = (void(*)(void))entry_point;
+        f();
+      }
     }
     else
     {
