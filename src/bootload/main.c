@@ -1,4 +1,5 @@
 #include "defines.h"
+#include "interrupt.h"
 #include "serial.h"
 #include "xmodem.h"
 #include "elf.h"
@@ -13,13 +14,15 @@ static int init(void)
   memcpy(&data_start, &erodata, (long)&edata - (long)&data_start);
   memset(&bss_start, 0, (long)&ebss - (long)&bss_start);
 
+  softvec_init();
+
   // initialize searial device
   serial_init(SERIAL_DEFAULT_DEVICE);
 
   return 0;
 }
 
-static dump(char* buf, long size)
+static int dump(char* buf, long size)
 {
   long i;
   if (size < 0)
@@ -60,6 +63,8 @@ int main(void)
   extern int buffer_start; // defined in linker script
   char* entry_point;
   void (*f)(void);
+
+  INTR_DISABLE;
 
   init();
 
