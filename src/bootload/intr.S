@@ -12,9 +12,13 @@ _intr_softerr:
   mov.l er2,@-er7 // push er2
   mov.l er1,@-er7 // push er1
   mov.l er0,@-er7 // push er0
-  mov.l er7,er1
+  mov.l er7,er1   // er1 == user stack
+  mov.l #_intrstack,sp // change to kernel stack
+  mov.l er1,@-er7  // save user stack to kernel stack
   mov.w #SOFTVEC_TYPE_SOFTERR,r0
   jsr   @_interrupt
+  mov.l @er7+,er1 // er1 == user stack
+  mov.l er1,er7   // restore user stack
   mov.l @er7+,er0 // pop er0
   mov.l @er7+,er1 // pop er1
   mov.l @er7+,er2 // pop er2
@@ -34,9 +38,13 @@ _intr_syscall:
   mov.l er2,@-er7 // push er2
   mov.l er1,@-er7 // push er1
   mov.l er0,@-er7 // push er0
-  mov.l er7,er1
+  mov.l er7,er1   // er1 == user stack
+  mov.l #_intrstack,sp // change to kernel stack
+  mov.l er1,@-er7  // save user stack to kernel stack
   mov.w #SOFTVEC_TYPE_SYSCALL,r0
   jsr   @_interrupt
+  mov.l @er7+,er1 // er1 == user stack
+  mov.l er1,er7   // restore user stack
   mov.l @er7+,er0 // pop er0
   mov.l @er7+,er1 // pop er1
   mov.l @er7+,er2 // pop er2
@@ -56,9 +64,13 @@ _intr_serintr:
   mov.l er2,@-er7 // push er2
   mov.l er1,@-er7 // push er1
   mov.l er0,@-er7 // push er0
-  mov.l er7,er1
+  mov.l er7,er1   // er1 == user stack
+  mov.l #_intrstack,sp // change to kernel stack
+  mov.l er1,@-er7  // save user stack to kernel stack
   mov.w #SOFTVEC_TYPE_SERINTR,r0
   jsr   @_interrupt
+  mov.l @er7+,er1 // er1 == user stack
+  mov.l er1,er7   // restore user stack
   mov.l @er7+,er0 // pop er0
   mov.l @er7+,er1 // pop er1
   mov.l @er7+,er2 // pop er2
