@@ -6,7 +6,8 @@
 // initial thread
 static int start_thread(int argc, char* argv[])
 {
-  kz_run(test10_1_main, "test10_1", 1, 0x100, 0, NULL);
+  kz_run(test11_1_main, "test10_1", 1, 0x100, 0, NULL);
+  kz_run(test11_2_main, "test10_1", 2, 0x100, 0, NULL);
 
   kz_chpri(15);
   INTR_ENABLE;

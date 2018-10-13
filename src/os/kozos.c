@@ -36,6 +36,23 @@ typedef struct _kz_thread {
   kz_context context;
 } kz_thread;
 
+typedef struct _kz_msgbuf {
+  struct _kz_msgbuf* next;
+  kz_thread* sender;
+  struct {
+    int size;
+    char* p;
+  } param;
+} kz_msgbuf;
+
+typedef struct _kz_msgbox {
+  kz_thread* receiver;
+  kz_msgbuf* head;
+  kz_msgbuf* tail;
+
+  long dummy[1]; // explicit padding for adjusting the size of struct to powers of 2
+} kz_msgbox;
+
 static struct {
   kz_thread* head;
   kz_thread* tail;
@@ -44,6 +61,7 @@ static struct {
 static kz_thread* current;
 static kz_thread threads[THREAD_NUM];
 static kz_handler_t handlers[SOFTVEC_TYPE_NUM];
+static kz_msgbox msgboxes[MSGBOX_ID_NUM];
 
 void dispatch(kz_context* context);
 
@@ -215,6 +233,89 @@ static int thread_kmfree(char* p)
   return 0;
 }
 
+static void sendmsg(kz_msgbox* mboxp, kz_thread* thp, int size, char* p)
+{
+  kz_msgbuf* mp;
+  mp = (kz_msgbuf*)kzmem_alloc(sizeof(*mp));
+  if (mp == NULL)
+    kz_sysdown();
+  mp->next = NULL;
+  mp->sender = thp;
+  mp->param.size = size;
+  mp->param.p = p;
+
+  if (mboxp->tail)
+  {
+    mboxp->tail->next = mp;
+  }
+  else
+  {
+    mboxp->head = mp;
+  }
+  mboxp->tail = mp;
+}
+
+static void recvmsg(kz_msgbox* mboxp)
+{
+  kz_msgbuf* mp;
+  kz_syscall_param_t* p;
+
+  mp = mboxp->head;
+  mboxp->head = mp->next;
+  if (mboxp->head == NULL)
+    mboxp->tail = NULL;
+  mp->next = NULL;
+
+  p = mboxp->receiver->syscall.param;
+  p->un.recv.ret = (kz_thread_id_t)mp->sender;
+  if (p->un.recv.sizep)
+    *(p->un.recv.sizep) = mp->param.size;
+  if (p->un.recv.pp)
+    *(p->un.recv.pp) = mp->param.p;
+
+  mboxp->receiver = NULL;
+
+  kzmem_free(mp);
+}
+
+static int thread_send(kz_msgbox_id_t id, int size, char* p)
+{
+  kz_msgbox* mboxp = &msgboxes[id];
+
+  putcurrent();
+  sendmsg(mboxp, current, size, p);
+
+  // wakeup waiting receiver
+  if (mboxp->receiver)
+  {
+    current = mboxp->receiver;
+    recvmsg(mboxp);
+    putcurrent();
+  }
+
+  return size;
+}
+
+static kz_thread_id_t thread_recv(kz_msgbox_id_t id, int* sizep, char** p)
+{
+  kz_msgbox* mboxp = &msgboxes[id];
+
+  if (mboxp->receiver)
+  {
+    kz_sysdown();
+  }
+
+  mboxp->receiver = current;
+
+  if (mboxp->head == NULL)
+    return -1; // just return, do not call putcurrent to sleep receiver thread
+
+  recvmsg(mboxp);
+  putcurrent();
+
+  return current->syscall.param->un.recv.ret;
+}
+
 static int setintr(softvec_type_t type, kz_handler_t handler)
 {
   static void thread_intr(softvec_type_t type, unsigned long sp);
@@ -260,6 +361,12 @@ static void call_functions(kz_syscall_type_t type, kz_syscall_param_t* p)
     break;
   case KZ_SYSCALL_TYPE_KMFREE:
     p->un.kmfree.ret = thread_kmfree(p->un.kmfree.p);
+    break;
+  case KZ_SYSCALL_TYPE_SEND:
+    p->un.send.ret = thread_send(p->un.send.id, p->un.send.size, p->un.send.p);
+    break;
+  case KZ_SYSCALL_TYPE_RECV:
+    p->un.recv.ret = thread_recv(p->un.recv.id, p->un.recv.sizep, p->un.recv.pp);
     break;
   default:
     break;
@@ -318,8 +425,9 @@ void kz_start(kz_func_t func, char* name, int priority, int stacksize, int argc,
   current = NULL;
 
   memset(readyque, 0, sizeof(readyque));
-  memset(threads, 0, sizeof(threads));
+  memset(threads,  0, sizeof(threads));
   memset(handlers, 0, sizeof(handlers));
+  memset(msgboxes, 0, sizeof(msgboxes));
 
   setintr(SOFTVEC_TYPE_SYSCALL, syscall_intr);
   setintr(SOFTVEC_TYPE_SOFTERR, softerr_intr);
